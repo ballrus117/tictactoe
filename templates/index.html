@@ -9,10 +9,12 @@
             font-family: Arial; 
             text-align: center; 
             margin-top: 50px; 
-            background-image: url('/static/bg1.jpg');
             background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
             color: white; 
             text-shadow: 3px 3px 5px #000000;
+            transition: background-image 0.5s ease-in-out;
         }
         #board { 
             display: grid; 
@@ -54,24 +56,20 @@
             background-color: rgba(0, 0, 0, 0.9);
         }
         
-        /* NEW: Styling for the role display */
         #role-display {
-            color: #ffeb3b; /* A nice yellow to make it pop */
+            color: #ffeb3b; 
             font-weight: normal;
         }
     </style>
 </head>
 <body>
 
-    <!-- The Mute Button -->
     <button id="mute-btn" onclick="toggleMute()">🔊</button>
 
     <h1>Tic-Tac-Toe</h1>
-    <h2 id="turn-display">X play now your turn</h2>
-    <!-- NEW: Shows the player their assigned role -->
+    <h2 id="turn-display">Waiting for players...</h2>
     <h3 id="role-display">Connecting to server...</h3>
 
-    <!-- The Audio Player -->
     <audio id="bg-music" loop>
         <source id="music-source" src="/static/music.mp3" type="audio/mpeg">
     </audio>
@@ -92,11 +90,9 @@
 
     <script>
         const socket = io();
+        let myRole = ''; 
 
-        let lastBg = 1;
-        let myRole = ''; // NEW: Store the player's role
-
-        // NEW: Listen for the server to tell us our role
+        // Listen for the server to tell us our role AND the current wallpaper
         socket.on('assign_role', function(data) {
             myRole = data.role;
             if (myRole === 'Spectator') {
@@ -104,25 +100,23 @@
             } else {
                 document.getElementById('role-display').innerText = "You are playing as: " + myRole;
             }
+            
+            // Set the wallpaper sent by the server
+            if (data.wallpaper) {
+                document.body.style.backgroundImage = "url('/static/" + data.wallpaper + "')";
+            }
         });
 
         function toggleMute() {
             let audioPlayer = document.getElementById('bg-music');
             let muteBtn = document.getElementById('mute-btn');
-            
             audioPlayer.muted = !audioPlayer.muted;
-            
-            if (audioPlayer.muted) {
-                muteBtn.innerText = "🔇";
-            } else {
-                muteBtn.innerText = "🔊";
-            }
+            muteBtn.innerText = audioPlayer.muted ? "🔇" : "🔊";
         }
 
         function makeMove(index) {
-            // Only play the sound if the server accepts the move (we send the click no matter what, server filters it)
             socket.emit('player_clicked', {index: index});
-            document.getElementById('bg-music').play().catch(e => console.log("Waiting for user click..."));
+            document.getElementById('bg-music').play().catch(e => console.log("Audio waiting for interaction..."));
         }
 
         function resetGame() {
@@ -131,54 +125,42 @@
 
         socket.on('update_board', function(data) {
             const squares = document.getElementsByClassName('square');
-            
             for (let i = 0; i < 9; i++) {
                 squares[i].innerText = data.board[i];
             }
-            
             document.getElementById('turn-display').innerText = "Your turn b0ss : " + data.turn;
+            document.getElementById('turn-display').style.color = "white"; // Reset color
+        });
 
-            let isEmpty = data.board.every(square => square === '');
-            if (isEmpty) {
-                let audioPlayer = document.getElementById('bg-music');
-                let musicSource = document.getElementById('music-source');
-
-                let roll = Math.floor(Math.random() * 100) + 1;
-
-                if (roll <= 10 && lastBg !== 'rare') { 
-                    document.body.style.backgroundImage = "url('/static/qotsa.jpg')";
-                    musicSource.src = "/static/secret_song.mp3"; 
-                    lastBg = 'rare'; 
-                } else {
-                    let pool = [1, 2, 3, 4, 5, 6, 6, 6, 6, 6]; 
-
-                    if (lastBg !== 'rare') {
-                        pool = pool.filter(num => num !== lastBg);
-                    }
-
-                    let randomNum = pool[Math.floor(Math.random() * pool.length)]; 
-
-                    document.body.style.backgroundImage = "url('/static/bg" + randomNum + ".jpg')";
-                    
-                    if (randomNum === 6) {
-                        musicSource.src = "/static/ff.mp3"; 
-                    } else {
-                        musicSource.src = "/static/music.mp3"; 
-                    }
-
-                    lastBg = randomNum; 
-                }
-
-                audioPlayer.load();
-                audioPlayer.play().catch(e => console.log("Waiting for user click..."));
+        // Sync new wallpaper when game resets
+        socket.on('new_round', function(data) {
+            document.body.style.backgroundImage = "url('/static/" + data.wallpaper + "')";
+            
+            // Logic to swap music based on the server's choice
+            let audioPlayer = document.getElementById('bg-music');
+            let musicSource = document.getElementById('music-source');
+            
+            if (data.wallpaper === 'qotsa.jpg') {
+                musicSource.src = "/static/secret_song.mp3";
+            } else if (data.wallpaper === 'bg6.jpg') {
+                musicSource.src = "/static/ff.mp3";
+            } else {
+                musicSource.src = "/static/music.mp3";
             }
+            
+            audioPlayer.load();
+            audioPlayer.play().catch(e => console.log("Audio waiting..."));
         });
 
         socket.on('announce_winner', function(data) {
-            if (data.winner === 'Tie') {
-                document.getElementById('turn-display').innerText = "both of you suck. try again";
-            } else {
-                document.getElementById('turn-display').innerText = "wow, " + data.winner + " is the winner. congratulations";
+            // Uses the personalized message from Python ('You Won!', 'You Lost!', etc.)
+            document.getElementById('turn-display').innerText = data.msg;
+            
+            // Optional: Color coding for the result
+            if (data.msg === "wow congratulations you won.") {
+                document.getElementById('turn-display').style.color = "#4CAF50"; // Green
+            } else if (data.msg === "wow you suck you lost.") {
+                document.getElementById('turn-display').style.color = "#FF5252"; // Red
             }
         });
     </script>
