@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Multiplayer Tic-Tac-Toe</title>
+    <!-- Import Socket.IO so the browser can talk to Python -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body { 
+            font-family: Arial; 
+            text-align: center; 
+            margin-top: 50px; 
+            background-image: url('/static/bg1.jpg');
+            background-size: cover;
+            color: white; 
+            text-shadow: 3px 3px 5px #000000;
+        }
+        #board { 
+            display: grid; 
+            grid-template-columns: repeat(3, 117px); 
+            gap: 3px; 
+            justify-content: center; 
+            margin: 30px auto;
+        }
+        .square {
+            width: 117px; 
+            height: 117px; 
+            font-size: 52px; 
+            cursor: pointer;
+            background-color: rgba(240, 240, 240, 0.8);
+            border: 5px solid #333;
+            font-weight: bold;
+        }
+        button { padding: 10px 20px; font-size: 19px; cursor: pointer; }
+
+        /* Circular Mute Button */
+        #mute-btn {
+            position: fixed; 
+            bottom: 20px;
+            right: 20px;
+            background-color: rgba(0, 0, 0, 0.6);
+            color: white;
+            border: 2px solid white;
+            border-radius: 50%; 
+            width: 55px;
+            height: 55px;
+            font-size: 26px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0; 
+        }
+        #mute-btn:hover {
+            background-color: rgba(0, 0, 0, 0.9);
+        }
+        
+        /* NEW: Styling for the role display */
+        #role-display {
+            color: #ffeb3b; /* A nice yellow to make it pop */
+            font-weight: normal;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- The Mute Button -->
+    <button id="mute-btn" onclick="toggleMute()">🔊</button>
+
+    <h1>Tic-Tac-Toe</h1>
+    <h2 id="turn-display">X play now your turn</h2>
+    <!-- NEW: Shows the player their assigned role -->
+    <h3 id="role-display">Connecting to server...</h3>
+
+    <!-- The Audio Player -->
+    <audio id="bg-music" loop>
+        <source id="music-source" src="/static/music.mp3" type="audio/mpeg">
+    </audio>
+
+    <div id="board">
+        <button class="square" onclick="makeMove(0)"></button>
+        <button class="square" onclick="makeMove(1)"></button>
+        <button class="square" onclick="makeMove(2)"></button>
+        <button class="square" onclick="makeMove(3)"></button>
+        <button class="square" onclick="makeMove(4)"></button>
+        <button class="square" onclick="makeMove(5)"></button>
+        <button class="square" onclick="makeMove(6)"></button>
+        <button class="square" onclick="makeMove(7)"></button>
+        <button class="square" onclick="makeMove(8)"></button>
+    </div>
+
+    <button onclick="resetGame()">Reset Game</button>
+
+    <script>
+        const socket = io();
+
+        let lastBg = 1;
+        let myRole = ''; // NEW: Store the player's role
+
+        // NEW: Listen for the server to tell us our role
+        socket.on('assign_role', function(data) {
+            myRole = data.role;
+            if (myRole === 'Spectator') {
+                document.getElementById('role-display').innerText = "Lobby is full. You are spectating.";
+            } else {
+                document.getElementById('role-display').innerText = "You are playing as: " + myRole;
+            }
+        });
+
+        function toggleMute() {
+            let audioPlayer = document.getElementById('bg-music');
+            let muteBtn = document.getElementById('mute-btn');
+            
+            audioPlayer.muted = !audioPlayer.muted;
+            
+            if (audioPlayer.muted) {
+                muteBtn.innerText = "🔇";
+            } else {
+                muteBtn.innerText = "🔊";
+            }
+        }
+
+        function makeMove(index) {
+            // Only play the sound if the server accepts the move (we send the click no matter what, server filters it)
+            socket.emit('player_clicked', {index: index});
+            document.getElementById('bg-music').play().catch(e => console.log("Waiting for user click..."));
+        }
+
+        function resetGame() {
+            socket.emit('reset_game');
+        }
+
+        socket.on('update_board', function(data) {
+            const squares = document.getElementsByClassName('square');
+            
+            for (let i = 0; i < 9; i++) {
+                squares[i].innerText = data.board[i];
+            }
+            
+            document.getElementById('turn-display').innerText = "Your turn b0ss : " + data.turn;
+
+            let isEmpty = data.board.every(square => square === '');
+            if (isEmpty) {
+                let audioPlayer = document.getElementById('bg-music');
+                let musicSource = document.getElementById('music-source');
+
+                let roll = Math.floor(Math.random() * 100) + 1;
+
+                if (roll <= 10 && lastBg !== 'rare') { 
+                    document.body.style.backgroundImage = "url('/static/qotsa.jpg')";
+                    musicSource.src = "/static/secret_song.mp3"; 
+                    lastBg = 'rare'; 
+                } else {
+                    let pool = [1, 2, 3, 4, 5, 6, 6, 6, 6, 6]; 
+
+                    if (lastBg !== 'rare') {
+                        pool = pool.filter(num => num !== lastBg);
+                    }
+
+                    let randomNum = pool[Math.floor(Math.random() * pool.length)]; 
+
+                    document.body.style.backgroundImage = "url('/static/bg" + randomNum + ".jpg')";
+                    
+                    if (randomNum === 6) {
+                        musicSource.src = "/static/ff.mp3"; 
+                    } else {
+                        musicSource.src = "/static/music.mp3"; 
+                    }
+
+                    lastBg = randomNum; 
+                }
+
+                audioPlayer.load();
+                audioPlayer.play().catch(e => console.log("Waiting for user click..."));
+            }
+        });
+
+        socket.on('announce_winner', function(data) {
+            if (data.winner === 'Tie') {
+                document.getElementById('turn-display').innerText = "both of you suck. try again";
+            } else {
+                document.getElementById('turn-display').innerText = "wow, " + data.winner + " is the winner. congratulations";
+            }
+        });
+    </script>
+</body>
+</html>
