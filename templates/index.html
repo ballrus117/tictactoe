@@ -3,7 +3,6 @@
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Multiplayer Tic-Tac-Toe</title>
-    <!-- Import Socket.IO so the browser can talk to Python -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <style>
         body { 
@@ -11,7 +10,6 @@
             text-align: center; 
             margin: 0;
             padding: 20px 10px;
-            /* Ensures wallpaper covers the screen and stays centered */
             background-size: cover;
             background-position: center;
             background-attachment: fixed;
@@ -31,7 +29,6 @@
 
         #board { 
             display: grid; 
-            /* Desktop/Landscape Default */
             grid-template-columns: repeat(3, 110px); 
             grid-template-rows: repeat(3, 110px);
             gap: 10px; 
@@ -58,7 +55,6 @@
 
         .square:hover { background-color: rgba(255, 255, 255, 0.95); }
 
-        /* Responsive Fix for Mobile Portrait */
         @media (max-width: 400px) {
             #board {
                 grid-template-columns: repeat(3, 85px);
@@ -130,6 +126,31 @@
     <button class="reset-btn" onclick="resetGame()">Reset Game</button>
 
     <script>
+        function chooseWallpaper() {
+            const wallpapers = ['bg1.jpg', 'bg2.jpg', 'bg3.jpg', 'bg4.jpg', 'bg5.jpg', 'bg6.jpg'];
+            const qotsaWallpaper = 'qotsa.jpg';
+            
+            if (Math.random() < 0.1) {
+                return qotsaWallpaper;
+            } else {
+                return wallpapers[Math.floor(Math.random() * wallpapers.length)];
+            }
+        }
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            const wallpaper = chooseWallpaper();
+            document.body.style.backgroundImage = "url('/static/" + wallpaper + "')";
+            
+            let musicSource = document.getElementById('music-source');
+            if (wallpaper === 'qotsa.jpg') {
+                musicSource.src = "/static/secret_song.mp3";
+            } else if (wallpaper === 'bg6.jpg') {
+                musicSource.src = "/static/ff.mp3";
+            } else {
+                musicSource.src = "/static/music.mp3";
+            }
+        });
+
         const socket = io();
         let myRole = ''; 
 
@@ -139,10 +160,6 @@
                 document.getElementById('role-display').innerText = "Lobby is full. You are spectating.";
             } else {
                 document.getElementById('role-display').innerText = "You are playing as: " + myRole;
-            }
-            
-            if (data.wallpaper) {
-                document.body.style.backgroundImage = "url('/static/" + data.wallpaper + "')";
             }
         });
 
@@ -174,6 +191,7 @@
 
         socket.on('new_round', function(data) {
             document.body.style.backgroundImage = "url('/static/" + data.wallpaper + "')";
+
             let audioPlayer = document.getElementById('bg-music');
             let musicSource = document.getElementById('music-source');
             
