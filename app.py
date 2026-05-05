@@ -11,28 +11,33 @@ board = [''] * 9
 current_player = 'X'
 game_over = False
 
-# The Bouncer - Tracks who is X and who is O
 players = {'X': None, 'O': None}
-
-# Keep track of a single shared wallpaper for the session
-# Add your wallpaper filenames to this list
 wallpapers = ['bg1.jpg', 'bg2.jpg', 'bg3.jpg'] 
 shared_wallpaper = random.choice(wallpapers)
 
 def check_winner():
-    win_lines = [
-        [0, 1, 2], [3, 4, 5], [6, 7, 8],  
-        [0, 3, 6], [1, 4, 7], [2, 5, 8],  
-        [0, 4, 8], [2, 4, 6]              
-    ]
+    win_lines = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6], [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]]
     for line in win_lines:
         a, b, c = line
         if board[a] != '' and board[a] == board[b] == board[c]:
             return board[a] 
-    
     if '' not in board:
         return 'Tie'
     return None
+
+def broadcast_custom_turns():
+    """Sends personalized turn messages based on the player's role"""
+    global current_player
+    for role, sid in players.items():
+        if sid:
+            if role == current_player:
+                msg = "Your turn b0ss"
+            else:
+                msg = f"waiting for {current_player}"
+            emit('update_board', {'board': board, 'turn_msg': msg}, to=sid)
+    
+    # Also update spectators so they know whose turn it is
+    emit('update_board', {'board': board, 'turn_msg': f"waiting for {current_player}"}, broadcast=True, include_self=False)
 
 @app.route('/')
 def home():
@@ -40,6 +45,7 @@ def home():
 
 @socketio.on('connect')
 def handle_connect():
+    global shared_wallpaper
     role = 'Spectator'
     if players['X'] is None:
         players['X'] = request.sid
@@ -48,9 +54,8 @@ def handle_connect():
         players['O'] = request.sid
         role = 'O'
     
-    # Send the shared wallpaper along with the role
     emit('assign_role', {'role': role, 'wallpaper': shared_wallpaper})
-    emit('update_board', {'board': board, 'turn': current_player})
+    broadcast_custom_turns()
 
 @socketio.on('disconnect')
 def handle_disconnect():
@@ -62,39 +67,32 @@ def handle_disconnect():
 @socketio.on('player_clicked')
 def handle_move(data):
     global board, current_player, game_over
-    
-    if players[current_player] != request.sid:
+    if players[current_player] != request.sid or game_over:
         return 
 
     square_index = data['index']
-    
-    if not game_over and board[square_index] == '':
+    if board[square_index] == '':
         board[square_index] = current_player
         winner = check_winner()
         
         if winner:
-            game_over = True 
-            emit('update_board', {'board': board, 'turn': current_player}, broadcast=True)
-            
-            # Send personalized messages to each player
+            game_over = True
             if winner == 'Tie':
                 emit('announce_winner', {'winner': 'Tie', 'msg': "wow both of you suck it is a tie."}, broadcast=True)
             else:
-                # Tell the winner they won
                 winner_sid = players[winner]
                 emit('announce_winner', {'winner': winner, 'msg': "wow congratulations you won."}, to=winner_sid)
                 
-                # Tell the loser they lost
                 loser_role = 'O' if winner == 'X' else 'X'
                 loser_sid = players[loser_role]
                 if loser_sid:
                     emit('announce_winner', {'winner': winner, 'msg': "wow you suck you lost."}, to=loser_sid)
                 
-                # Tell spectators who won
+                # Update spectators
                 emit('announce_winner', {'winner': winner, 'msg': f"Player {winner} Won!"}, broadcast=True, include_self=False)
         else:
             current_player = 'O' if current_player == 'X' else 'X'
-            emit('update_board', {'board': board, 'turn': current_player}, broadcast=True)
+            broadcast_custom_turns()
 
 @socketio.on('reset_game')
 def reset():
@@ -102,10 +100,9 @@ def reset():
     board = [''] * 9
     current_player = 'X'
     game_over = False
-    # Pick a new shared wallpaper for the next round
     shared_wallpaper = random.choice(wallpapers)
-    emit('update_board', {'board': board, 'turn': current_player}, broadcast=True)
     emit('new_round', {'wallpaper': shared_wallpaper}, broadcast=True)
+    broadcast_custom_turns()
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
