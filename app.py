@@ -1,9 +1,9 @@
 from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit
 import os
+import random
 
 app = Flask(__name__)
-# The secret_key helps secure the session
 app.config['SECRET_KEY'] = 'secret!'
 socketio = SocketIO(app, cors_allowed_origins="*")
 
@@ -13,6 +13,11 @@ game_over = False
 
 # The Bouncer - Tracks who is X and who is O
 players = {'X': None, 'O': None}
+
+# Keep track of a single shared wallpaper for the session
+# Add your wallpaper filenames to this list
+wallpapers = ['bg1.jpg', 'bg2.jpg', 'bg3.jpg'] 
+shared_wallpaper = random.choice(wallpapers)
 
 def check_winner():
     win_lines = [
@@ -43,7 +48,8 @@ def handle_connect():
         players['O'] = request.sid
         role = 'O'
     
-    emit('assign_role', {'role': role})
+    # Send the shared wallpaper along with the role
+    emit('assign_role', {'role': role, 'wallpaper': shared_wallpaper})
     emit('update_board', {'board': board, 'turn': current_player})
 
 @socketio.on('disconnect')
@@ -69,22 +75,38 @@ def handle_move(data):
         if winner:
             game_over = True 
             emit('update_board', {'board': board, 'turn': current_player}, broadcast=True)
-            emit('announce_winner', {'winner': winner}, broadcast=True)
+            
+            # Send personalized messages to each player
+            if winner == 'Tie':
+                emit('announce_winner', {'winner': 'Tie', 'msg': "It's a Tie!"}, broadcast=True)
+            else:
+                # Tell the winner they won
+                winner_sid = players[winner]
+                emit('announce_winner', {'winner': winner, 'msg': "You Won!"}, to=winner_sid)
+                
+                # Tell the loser they lost
+                loser_role = 'O' if winner == 'X' else 'X'
+                loser_sid = players[loser_role]
+                if loser_sid:
+                    emit('announce_winner', {'winner': winner, 'msg': "You Lost!"}, to=loser_sid)
+                
+                # Tell spectators who won
+                emit('announce_winner', {'winner': winner, 'msg': f"Player {winner} Won!"}, broadcast=True, include_self=False)
         else:
             current_player = 'O' if current_player == 'X' else 'X'
             emit('update_board', {'board': board, 'turn': current_player}, broadcast=True)
 
 @socketio.on('reset_game')
 def reset():
-    global board, current_player, game_over
+    global board, current_player, game_over, shared_wallpaper
     board = [''] * 9
     current_player = 'X'
     game_over = False
+    # Pick a new shared wallpaper for the next round
+    shared_wallpaper = random.choice(wallpapers)
     emit('update_board', {'board': board, 'turn': current_player}, broadcast=True)
+    emit('new_round', {'wallpaper': shared_wallpaper}, broadcast=True)
 
-# FINAL RENDER CONFIGURATION
 if __name__ == '__main__':
-    # Grabs the PORT from Render (10000) or defaults to 5000 for local testing
     port = int(os.environ.get('PORT', 10000))
-    # host='0.0.0.0' is required for the public internet to see the app
     socketio.run(app, host='0.0.0.0', port=port, debug=False)
