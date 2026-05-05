@@ -78,17 +78,17 @@ def handle_move(data):
             
             # Send personalized messages to each player
             if winner == 'Tie':
-                emit('announce_winner', {'winner': 'Tie', 'msg': "It's a Tie!"}, broadcast=True)
+                emit('announce_winner', {'winner': 'Tie', 'msg': "wow both of you suck it is a tie."}, broadcast=True)
             else:
                 # Tell the winner they won
                 winner_sid = players[winner]
-                emit('announce_winner', {'winner': winner, 'msg': "You Won!"}, to=winner_sid)
+                emit('announce_winner', {'winner': winner, 'msg': "wow congratulations you won."}, to=winner_sid)
                 
                 # Tell the loser they lost
                 loser_role = 'O' if winner == 'X' else 'X'
                 loser_sid = players[loser_role]
                 if loser_sid:
-                    emit('announce_winner', {'winner': winner, 'msg': "You Lost!"}, to=loser_sid)
+                    emit('announce_winner', {'winner': winner, 'msg': "wow you suck you lost."}, to=loser_sid)
                 
                 # Tell spectators who won
                 emit('announce_winner', {'winner': winner, 'msg': f"Player {winner} Won!"}, broadcast=True, include_self=False)
