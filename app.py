@@ -26,8 +26,9 @@ def check_winner():
     return None
 
 def broadcast_custom_turns():
+    """Sends personalized turn messages based on the player's role"""
     global current_player
-    # Use socketio.emit to ensure 'to=' works perfectly
+    # We use socketio.emit (global) to ensure the 'to=' parameter works correctly
     for role, sid in players.items():
         if sid:
             msg = "Your turn b0ss" if role == current_player else f"waiting for {current_player}"
@@ -51,7 +52,11 @@ def handle_connect():
         players['O'] = request.sid
         role = 'O'
     
+    # 1. Immediate role assignment
     emit('assign_role', {'role': role, 'wallpaper': shared_wallpaper})
+    
+    # 2. Small sleep ensures the socket 'handshake' is fully complete before broadcasting
+    socketio.sleep(0.2)
     broadcast_custom_turns()
 
 @socketio.on('disconnect')
@@ -74,7 +79,6 @@ def handle_move(data):
         
         if winner:
             game_over = True
-            # Update board one last time so the winning move appears
             socketio.emit('update_board', {'board': board, 'turn_msg': "Game Over!"}, broadcast=True)
             
             if winner == 'Tie':
@@ -89,7 +93,7 @@ def handle_move(data):
                     socketio.emit('announce_winner', {'msg': "wow you suck you lost."}, to=players[loser_role])
                 
                 # Spectator Message
-                socketio.emit('announce_winner', {'msg': f"Player {winner} Won!"}, broadcast=True, include_self=False)
+                socketio.emit('announce_winner', {'msg': f"Player {winner} won"}, broadcast=True, include_self=False)
         else:
             current_player = 'O' if current_player == 'X' else 'X'
             broadcast_custom_turns()
