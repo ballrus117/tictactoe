@@ -3,6 +3,7 @@
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Multiplayer Tic-Tac-Toe</title>
+    <!-- Import Socket.IO so the browser can talk to Python -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <style>
         body { 
@@ -166,7 +167,8 @@
             for (let i = 0; i < 9; i++) {
                 squares[i].innerText = data.board[i];
             }
-            document.getElementById('turn-display').innerText = "Your turn b0ss : " + data.turn;
+            // MODIFIED: Use turn_msg for personalized turn notifications
+            document.getElementById('turn-display').innerText = data.turn_msg;
             document.getElementById('turn-display').style.color = "white"; 
         });
 
@@ -188,13 +190,16 @@
         });
 
         socket.on('announce_winner', function(data) {
+            // Displays the specific message sent from the server
             document.getElementById('turn-display').innerText = data.msg;
             
-            // Checking for the exact text sent from Python
+            // Color coding based on your custom messages
             if (data.msg === "wow congratulations you won.") {
-                document.getElementById('turn-display').style.color = "#4CAF50"; 
+                document.getElementById('turn-display').style.color = "#4CAF50"; // Green
             } else if (data.msg === "wow you suck you lost.") {
-                document.getElementById('turn-display').style.color = "#FF5252"; 
+                document.getElementById('turn-display').style.color = "#FF5252"; // Red
+            } else if (data.msg === "wow both of you suck it is a tie.") {
+                document.getElementById('turn-display').style.color = "#ffeb3b"; // Yellow
             }
         });
     </script>
