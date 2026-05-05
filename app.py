@@ -26,18 +26,15 @@ def check_winner():
     return None
 
 def broadcast_custom_turns():
-    """Sends personalized turn messages based on the player's role"""
     global current_player
+    # Use socketio.emit to ensure 'to=' works perfectly
     for role, sid in players.items():
         if sid:
-            if role == current_player:
-                msg = "Your turn b0ss"
-            else:
-                msg = f"waiting for {current_player}"
-            emit('update_board', {'board': board, 'turn_msg': msg}, to=sid)
+            msg = "Your turn b0ss" if role == current_player else f"waiting for {current_player}"
+            socketio.emit('update_board', {'board': board, 'turn_msg': msg}, to=sid)
     
-    # Also update spectators so they know whose turn it is
-    emit('update_board', {'board': board, 'turn_msg': f"waiting for {current_player}"}, broadcast=True, include_self=False)
+    # Update anyone else (Spectators)
+    socketio.emit('update_board', {'board': board, 'turn_msg': f"waiting for {current_player}"}, broadcast=True, include_self=False)
 
 @app.route('/')
 def home():
@@ -77,19 +74,22 @@ def handle_move(data):
         
         if winner:
             game_over = True
+            # Update board one last time so the winning move appears
+            socketio.emit('update_board', {'board': board, 'turn_msg': "Game Over!"}, broadcast=True)
+            
             if winner == 'Tie':
-                emit('announce_winner', {'winner': 'Tie', 'msg': "wow both of you suck it is a tie."}, broadcast=True)
+                socketio.emit('announce_winner', {'msg': "wow both of you suck it is a tie."}, broadcast=True)
             else:
-                winner_sid = players[winner]
-                emit('announce_winner', {'winner': winner, 'msg': "wow congratulations you won."}, to=winner_sid)
+                # Targeted Winner Message
+                socketio.emit('announce_winner', {'msg': "wow congratulations you won."}, to=players[winner])
                 
+                # Targeted Loser Message
                 loser_role = 'O' if winner == 'X' else 'X'
-                loser_sid = players[loser_role]
-                if loser_sid:
-                    emit('announce_winner', {'winner': winner, 'msg': "wow you suck you lost."}, to=loser_sid)
+                if players[loser_role]:
+                    socketio.emit('announce_winner', {'msg': "wow you suck you lost."}, to=players[loser_role])
                 
-                # Update spectators
-                emit('announce_winner', {'winner': winner, 'msg': f"Player {winner} Won!"}, broadcast=True, include_self=False)
+                # Spectator Message
+                socketio.emit('announce_winner', {'msg': f"Player {winner} Won!"}, broadcast=True, include_self=False)
         else:
             current_player = 'O' if current_player == 'X' else 'X'
             broadcast_custom_turns()
@@ -101,7 +101,7 @@ def reset():
     current_player = 'X'
     game_over = False
     shared_wallpaper = random.choice(wallpapers)
-    emit('new_round', {'wallpaper': shared_wallpaper}, broadcast=True)
+    socketio.emit('new_round', {'wallpaper': shared_wallpaper}, broadcast=True)
     broadcast_custom_turns()
 
 if __name__ == '__main__':
